@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中英文符号替换工具</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Consolas', monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        .options {
+            margin: 15px 0;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .result {
+            margin-top: 20px;
+        }
+        .checkbox-group {
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>中英文符号替换工具</h1>
+        
+        <div>
+            <label for="inputText">请输入要替换中英文符号的文本：</label>
+            <textarea id="inputText" placeholder="在此输入文本..."></textarea>
+        </div>
+        
+        <div class="options">
+            <div class="checkbox-group">
+                <input type="checkbox" id="ignoreString" checked>
+                <label for="ignoreString">忽略字符串内的符号</label>
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="ignoreComment" checked>
+                <label for="ignoreComment">忽略注释内的符号</label>
+            </div>
+        </div>
+        
+        <button id="replaceBtn">替换符号</button>
+        
+        <div class="result">
+            <label for="outputText">替换后的文本：</label>
+            <textarea id="outputText" readonly></textarea>
+        </div>
+    </div>
+
+    <script>
+        // 确保DOM加载完成后再添加事件监听器
+        document.addEventListener('DOMContentLoaded', function() {
+            // 获取替换按钮并添加点击事件
+            document.getElementById('replaceBtn').addEventListener('click', function() {
+                const inputText = document.getElementById('inputText').value;
+                const ignoreString = document.getElementById('ignoreString').checked;
+                const ignoreComment = document.getElementById('ignoreComment').checked;
+                
+                // 创建符号映射表
+                const symbolMap = {
+                    '；': ';',
+                    '：': ':',
+                    '，': ',',
+                    '。': '.',
+                    '！': '!',
+                    '？': '?',
+                    '（': '(',
+                    '）': ')',
+                    '【': '[',
+                    '】': ']',
+                    '《': '<',
+                    '》': '>',
+                    '\u201C': '"', // 中文左引号
+                    '\u201D': '"', // 中文右引号
+                    '\u2018': '\'', // 中文左单引号
+                    '\u2019': '\'', // 中文右单引号
+                    '、': '\\',
+                    '｛': '{',
+                    '｝': '}'
+                };
+                
+                let result = '';
+                let inString = false;
+                let inCharLiteral = false;
+                let inLineComment = false;
+                let inBlockComment = false;
+                let escaped = false;
+                
+                for (let i = 0; i < inputText.length; i++) {
+                    const char = inputText[i];
+                    const nextChar = i + 1 < inputText.length ? inputText[i + 1] : '';
+                    
+                    // 处理转义字符
+                    if (char === '\\' && !escaped) {
+                        escaped = true;
+                        result += char;
+                        continue;
+                    }
+                    
+                    // 如果前一个字符是转义字符，当前字符不会改变状态
+                    if (!escaped) {
+                        // 处理字符串
+                        if (char === '"' && !inCharLiteral && !inLineComment && !inBlockComment) {
+                            inString = !inString;
+                        }
+                        // 处理字符字面量
+                        else if (char === '\'' && !inString && !inLineComment && !inBlockComment) {
+                            inCharLiteral = !inCharLiteral;
+                        }
+                        // 处理行注释
+                        else if (char === '/' && nextChar === '/' && !inString && !inCharLiteral && !inBlockComment) {
+                            inLineComment = true;
+                        }
+                        // 处理块注释开始
+                        else if (char === '/' && nextChar === '*' && !inString && !inCharLiteral && !inLineComment) {
+                            inBlockComment = true;
+                        }
+                        // 处理块注释结束
+                        else if (char === '*' && nextChar === '/' && inBlockComment) {
+                            inBlockComment = false;
+                            result += char + nextChar;
+                            i++; // 跳过 '/'
+                            escaped = false; // 重置转义状态
+                            continue;
+                        }
+                    }
+                    
+                    // 处理行注释结束（换行符不受转义影响）
+                    if ((char === '\n' || char === '\r') && inLineComment) {
+                        inLineComment = false;
+                    }
+                    
+                    // 重置转义状态
+                    if (escaped) {
+                        escaped = false;
+                    }
+                    
+                    // 如果不在字符串、字符字面量或注释中，或者不忽略这些区域，则替换中文符号
+                    if ((!inString || !ignoreString) && 
+                        (!inCharLiteral || !ignoreString) && 
+                        (!(inLineComment || inBlockComment) || !ignoreComment)) {
+                        
+                        if (symbolMap[char]) {
+                            result += symbolMap[char];
+                        } else {
+                            result += char;
+                        }
+                    } else {
+                        result += char;
+                    }
+                }
+                
+                document.getElementById('outputText').value = result;
+            });
+        });
+    </script>
+</body>
+</html>
